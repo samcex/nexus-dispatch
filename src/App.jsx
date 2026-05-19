@@ -9,19 +9,34 @@ import {
   Search, 
   Bell, 
   Plus, 
-  MoreVertical,
+  Menu,
+  X,
   Navigation,
   Clock,
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix for Leaflet marker icons in React
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+let DefaultIcon = L.icon({
+    iconUrl: icon,
+    shadowUrl: iconShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41]
+});
+L.Marker.prototype.options.icon = DefaultIcon;
 
 // --- Mock Data ---
 const INITIAL_DISPATCHES = [
-  { id: 'DS-4902', destination: 'Central Park North', status: 'In Progress', priority: 'High', driver: 'Alex R.', time: '12:45 PM' },
-  { id: 'DS-4903', destination: 'Wall Street 12', status: 'Pending', priority: 'Medium', driver: 'Sarah L.', time: '1:15 PM' },
-  { id: 'DS-4904', destination: 'Brooklyn Bridge', status: 'Completed', priority: 'Low', driver: 'Mike K.', time: '11:30 AM' },
+  { id: 'DS-4902', destination: 'Central Park North, NY', status: 'In Progress', priority: 'High', driver: 'Alex R.', time: '12:45 PM' },
+  { id: 'DS-4903', destination: 'Wall Street 12, NY', status: 'Pending', priority: 'Medium', driver: 'Sarah L.', time: '1:15 PM' },
+  { id: 'DS-4904', destination: 'Brooklyn Bridge, NY', status: 'Completed', priority: 'Low', driver: 'Mike K.', time: '11:30 AM' },
 ];
 
 const VEHICLES = [
@@ -30,9 +45,16 @@ const VEHICLES = [
   { id: 'V-103', name: 'E-Transit 09', status: 'Online', battery: '92%' },
 ];
 
+const DRIVERS = [
+  { id: 'D-01', name: 'Alex R.', status: 'On Duty', vehicle: 'V-101', rating: 4.9 },
+  { id: 'D-02', name: 'Sarah L.', status: 'On Duty', vehicle: 'V-102', rating: 4.8 },
+  { id: 'D-03', name: 'Mike K.', status: 'On Break', vehicle: 'N/A', rating: 4.7 },
+  { id: 'D-04', name: 'Elena V.', status: 'On Duty', vehicle: 'V-103', rating: 5.0 },
+];
+
 // --- Components ---
 
-const Sidebar = ({ activeTab, setActiveTab }) => {
+const Sidebar = ({ activeTab, setActiveTab, isOpen, setIsOpen }) => {
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'map', icon: MapIcon, label: 'Live Map' },
@@ -43,17 +65,20 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
   ];
 
   return (
-    <div className="sidebar glass">
+    <div className={`sidebar glass ${isOpen ? 'open' : ''}`}>
       <div className="brand">
         <div className="brand-logo" />
         <h1 className="brand-name">NEXUS DISPATCH</h1>
+        <button className="mobile-toggle" style={{ marginLeft: 'auto' }} onClick={() => setIsOpen(false)}>
+          <X size={20} />
+        </button>
       </div>
       <div className="nav-group">
         {menuItems.map((item) => (
           <div 
             key={item.id} 
             className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(item.id)}
+            onClick={() => { setActiveTab(item.id); setIsOpen(false); }}
           >
             <item.icon size={20} />
             <span>{item.label}</span>
@@ -64,15 +89,20 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
   );
 };
 
-const Header = () => (
+const Header = ({ onMenuClick }) => (
   <header className="header glass">
-    <div className="search-bar glass">
-      <Search size={18} className="text-secondary" />
-      <input 
-        type="text" 
-        placeholder="Search dispatches, vehicles, or drivers..." 
-        style={{ background: 'none', border: 'none', color: 'white', outline: 'none', width: '100%' }}
-      />
+    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+      <button className="mobile-toggle" onClick={onMenuClick}>
+        <Menu size={24} />
+      </button>
+      <div className="search-bar glass">
+        <Search size={18} className="text-secondary" />
+        <input 
+          type="text" 
+          placeholder="Search..." 
+          style={{ background: 'none', border: 'none', color: 'white', outline: 'none', width: '100%' }}
+        />
+      </div>
     </div>
     <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
       <div style={{ position: 'relative' }}>
@@ -81,7 +111,7 @@ const Header = () => (
       </div>
       <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', cursor: 'pointer' }}>
         <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#334155' }} />
-        <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Ops Center</span>
+        <span style={{ fontSize: '0.9rem', fontWeight: 500 }} className="brand-name">Ops Center</span>
       </div>
     </div>
   </header>
@@ -98,14 +128,14 @@ const StatCard = ({ label, value, icon: Icon, trend }) => (
     </div>
     <div className="stat-value">{value}</div>
     {trend && (
-      <div style={{ fontSize: '0.75rem', color: trend.startsWith('+') ? 'var(--success-color)' : 'var(--danger-color)', marginTop: '0.5rem' }}>
-        {trend} from yesterday
+      <div style={{ fontSize: '0.75rem', color: trend.startsWith('+') ? 'var(--success-color)' : 'var(--danger-color)', marginTop: '4px' }}>
+        {trend} vs last month
       </div>
     )}
   </motion.div>
 );
 
-const DispatchCard = ({ dispatch, onStatusChange }) => {
+const DispatchCard = ({ dispatch, onStatusChange, onDelete }) => {
   const statuses = ['Pending', 'In Progress', 'Completed'];
   
   const cycleStatus = () => {
@@ -119,27 +149,36 @@ const DispatchCard = ({ dispatch, onStatusChange }) => {
       layout
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
       className="glass"
       style={{ padding: '1rem', borderRadius: '12px', borderLeft: `4px solid ${dispatch.priority === 'High' ? 'var(--danger-color)' : 'var(--accent-color)'}` }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
         <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{dispatch.id}</span>
-        <span 
-          onClick={cycleStatus}
-          style={{ 
-            fontSize: '0.7rem', 
-            padding: '2px 8px', 
-            borderRadius: '10px', 
-            background: dispatch.status === 'In Progress' ? 'rgba(59, 130, 246, 0.2)' : dispatch.status === 'Completed' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)',
-            color: dispatch.status === 'In Progress' ? 'var(--accent-color)' : dispatch.status === 'Completed' ? 'var(--success-color)' : 'var(--text-secondary)',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease'
-          }}
-        >
-          {dispatch.status}
-        </span>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <span 
+            onClick={cycleStatus}
+            style={{ 
+              fontSize: '0.7rem', 
+              padding: '2px 8px', 
+              borderRadius: '10px', 
+              background: dispatch.status === 'In Progress' ? 'rgba(59, 130, 246, 0.2)' : dispatch.status === 'Completed' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)',
+              color: dispatch.status === 'In Progress' ? 'var(--accent-color)' : dispatch.status === 'Completed' ? 'var(--success-color)' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            {dispatch.status}
+          </span>
+          <button 
+            onClick={() => onDelete(dispatch.id)}
+            style={{ background: 'none', border: 'none', color: 'var(--danger-color)', cursor: 'pointer', opacity: 0.6 }}
+          >
+            <X size={14} />
+          </button>
+        </div>
       </div>
-      <div style={{ fontSize: '0.85rem', marginBottom: '0.75rem' }}>{dispatch.destination}</div>
+      <div style={{ fontSize: '0.85rem', marginBottom: '0.75rem', lineHeight: '1.4' }}>{dispatch.destination}</div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
           <Navigation size={12} />
@@ -153,25 +192,6 @@ const DispatchCard = ({ dispatch, onStatusChange }) => {
     </motion.div>
   );
 };
-
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-
-// Fix for Leaflet marker icons in React
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-let DefaultIcon = L.icon({
-    iconUrl: icon,
-    shadowUrl: iconShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41]
-});
-L.Marker.prototype.options.icon = DefaultIcon;
-
-// ... (INITIAL_DISPATCHES and VEHICLES stay the same)
-
-// ... (Sidebar and Header stay the same)
 
 const RealMap = () => {
   const [positions, setPositions] = useState(
@@ -219,7 +239,7 @@ const RealMap = () => {
       </MapContainer>
       <div style={{ position: 'absolute', bottom: '1rem', left: '1rem', display: 'flex', gap: '0.5rem', zIndex: 1000 }}>
         <div className="glass" style={{ padding: '0.5rem 1rem', borderRadius: '8px', fontSize: '0.75rem' }}>
-          Live Units: 4
+          Live Units: {positions.length}
         </div>
         <div className="glass" style={{ padding: '0.5rem 1rem', borderRadius: '8px', fontSize: '0.75rem' }}>
           Region: New York
@@ -232,28 +252,24 @@ const RealMap = () => {
 const CreateDispatchModal = ({ isOpen, onClose, onCreate }) => {
   const [formData, setFormData] = useState({ destination: '', priority: 'Medium', driver: 'Auto Assign' });
   const [suggestions, setSuggestions] = useState([]);
-  const [loading, setLoading] = useState(false);
 
   const searchAddress = async (query) => {
     if (query.length < 3) {
       setSuggestions([]);
       return;
     }
-    setLoading(true);
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
       const data = await res.json();
       setSuggestions(data);
     } catch (err) {
       console.error('Geocoding error:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (formData.destination) searchAddress(formData.destination);
+      if (formData.destination && formData.destination.length > 2) searchAddress(formData.destination);
     }, 500);
     return () => clearTimeout(timer);
   }, [formData.destination]);
@@ -355,8 +371,12 @@ const CreateDispatchModal = ({ isOpen, onClose, onCreate }) => {
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [dispatches, setDispatches] = useState(() => {
-    const saved = localStorage.getItem('nexus_dispatches');
-    return saved ? JSON.parse(saved) : INITIAL_DISPATCHES;
+    try {
+      const saved = localStorage.getItem('nexus_dispatches');
+      return saved ? JSON.parse(saved) : INITIAL_DISPATCHES;
+    } catch (e) {
+      return INITIAL_DISPATCHES;
+    }
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -417,7 +437,7 @@ export default function App() {
           </>
         );
       case 'map':
-        return <div style={{ gridColumn: 'span 12', height: '80vh' }}><RealMap /></div>;
+        return <div style={{ gridColumn: 'span 12', height: 'calc(100vh - 120px)' }}><RealMap /></div>;
       case 'dispatches':
         return (
           <div className="glass" style={{ gridColumn: 'span 12', padding: '2rem', borderRadius: '24px' }}>
