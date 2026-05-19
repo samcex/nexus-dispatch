@@ -261,6 +261,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [dispatches, setDispatches] = useState(INITIAL_DISPATCHES);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const createDispatch = (data) => {
     const newDispatch = {
@@ -278,38 +279,83 @@ export default function App() {
     setDispatches(prev => prev.map(d => d.id === id ? { ...d, status: newStatus } : d));
   };
 
+  const renderContent = () => {
+    switch(activeTab) {
+      case 'dashboard':
+        return (
+          <>
+            <StatCard label="Active Dispatches" value={dispatches.filter(d => d.status !== 'Completed').length} icon={ClipboardList} trend="+2.4%" />
+            <StatCard label="Available Drivers" value="8" icon={Users} trend="-1" />
+            <StatCard label="Avg. Response Time" value="4.2m" icon={Clock} trend="-0.5m" />
+            <StatCard label="Completed Today" value={dispatches.filter(d => d.status === 'Completed').length + 45} icon={CheckCircle2} trend="+12%" />
+            <MapSimulation />
+            <div className="dispatch-list glass">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <h2 style={{ fontSize: '1rem', fontFamily: 'var(--font-display)' }}>Active Tasks</h2>
+                <button 
+                  className="glass" 
+                  style={{ padding: '4px 8px', borderRadius: '6px', border: 'none', color: 'white', cursor: 'pointer' }}
+                  onClick={() => setIsModalOpen(true)}
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto' }}>
+                <AnimatePresence>
+                  {dispatches.map(d => (
+                    <DispatchCard key={d.id} dispatch={d} onStatusChange={handleStatusChange} />
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
+          </>
+        );
+      case 'map':
+        return <div style={{ gridColumn: 'span 12', height: '80vh' }}><MapSimulation /></div>;
+      case 'dispatches':
+        return (
+          <div className="glass" style={{ gridColumn: 'span 12', padding: '2rem', borderRadius: '24px' }}>
+             <h2 style={{ marginBottom: '1.5rem', fontFamily: 'var(--font-display)' }}>All Dispatches</h2>
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+                {dispatches.map(d => <DispatchCard key={d.id} dispatch={d} onStatusChange={handleStatusChange} />)}
+             </div>
+          </div>
+        );
+      case 'vehicles':
+        return (
+          <div className="glass" style={{ gridColumn: 'span 12', padding: '2rem', borderRadius: '24px' }}>
+             <h2 style={{ marginBottom: '1.5rem', fontFamily: 'var(--font-display)' }}>Fleet Status</h2>
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1rem' }}>
+                {VEHICLES.map(v => (
+                  <div key={v.id} className="glass" style={{ padding: '1.5rem', borderRadius: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <span style={{ fontWeight: 700 }}>{v.id}</span>
+                      <div className={`status-indicator status-${v.status.toLowerCase()}`} />
+                    </div>
+                    <div style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>{v.name}</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Battery: {v.battery}</div>
+                  </div>
+                ))}
+             </div>
+          </div>
+        );
+      default:
+        return <div style={{ gridColumn: 'span 12', padding: '4rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Module under development</div>;
+    }
+  };
+
   return (
     <>
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        isOpen={isSidebarOpen} 
+        setIsOpen={setIsSidebarOpen} 
+      />
       <div className="main-wrapper">
-        <Header />
+        <Header onMenuClick={() => setIsSidebarOpen(true)} />
         <main className="content-container">
-          <StatCard label="Active Dispatches" value={dispatches.filter(d => d.status !== 'Completed').length} icon={ClipboardList} trend="+2.4%" />
-          <StatCard label="Available Drivers" value="8" icon={Users} trend="-1" />
-          <StatCard label="Avg. Response Time" value="4.2m" icon={Clock} trend="-0.5m" />
-          <StatCard label="Completed Today" value={dispatches.filter(d => d.status === 'Completed').length + 45} icon={CheckCircle2} trend="+12%" />
-
-          <MapSimulation />
-
-          <div className="dispatch-list glass">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <h2 style={{ fontSize: '1rem', fontFamily: 'var(--font-display)' }}>Active Tasks</h2>
-              <button 
-                className="glass" 
-                style={{ padding: '4px 8px', borderRadius: '6px', border: 'none', color: 'white', cursor: 'pointer' }}
-                onClick={() => setIsModalOpen(true)}
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto' }}>
-              <AnimatePresence>
-                {dispatches.map(d => (
-                  <DispatchCard key={d.id} dispatch={d} onStatusChange={handleStatusChange} />
-                ))}
-              </AnimatePresence>
-            </div>
-          </div>
+          {renderContent()}
         </main>
       </div>
       <CreateDispatchModal 
