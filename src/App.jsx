@@ -229,6 +229,32 @@ const RealMap = () => {
 
 const CreateDispatchModal = ({ isOpen, onClose, onCreate }) => {
   const [formData, setFormData] = useState({ destination: '', priority: 'Medium', driver: 'Auto Assign' });
+  const [suggestions, setSuggestions] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const searchAddress = async (query) => {
+    if (query.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
+      const data = await res.json();
+      setSuggestions(data);
+    } catch (err) {
+      console.error('Geocoding error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (formData.destination) searchAddress(formData.destination);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [formData.destination]);
 
   if (!isOpen) return null;
 
@@ -238,26 +264,48 @@ const CreateDispatchModal = ({ isOpen, onClose, onCreate }) => {
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         className="glass" 
-        style={{ padding: '2rem', borderRadius: '24px', width: '400px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
+        style={{ padding: '2rem', borderRadius: '24px', width: '450px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
       >
-        <h2 style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)' }}>New Dispatch</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Destination</label>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)' }}>New Dispatch</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button>
+        </div>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', position: 'relative' }}>
+            <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Destination Address</label>
             <input 
               className="glass" 
-              style={{ padding: '0.75rem', borderRadius: '8px', border: 'none', color: 'white' }}
+              style={{ padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--surface-border)', color: 'white', width: '100%' }}
               value={formData.destination}
               onChange={e => setFormData({...formData, destination: e.target.value})}
-              placeholder="Enter address..."
+              placeholder="Search real address..."
             />
+            {suggestions.length > 0 && (
+              <div className="glass" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, marginTop: '5px', borderRadius: '12px', overflow: 'hidden' }}>
+                {suggestions.map((s, idx) => (
+                  <div 
+                    key={idx} 
+                    className="nav-item" 
+                    style={{ padding: '0.75rem', fontSize: '0.8rem', borderBottom: idx < suggestions.length - 1 ? '1px solid var(--surface-border)' : 'none' }}
+                    onClick={() => {
+                      setFormData({...formData, destination: s.display_name});
+                      setSuggestions([]);
+                    }}
+                  >
+                    {s.display_name}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
+
           <div style={{ display: 'flex', gap: '1rem' }}>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Priority</label>
               <select 
                 className="glass" 
-                style={{ padding: '0.75rem', borderRadius: '8px', border: 'none', color: 'white', background: 'var(--surface-color)' }}
+                style={{ padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--surface-border)', color: 'white', background: 'var(--surface-color)' }}
                 value={formData.priority}
                 onChange={e => setFormData({...formData, priority: e.target.value})}
               >
@@ -266,23 +314,37 @@ const CreateDispatchModal = ({ isOpen, onClose, onCreate }) => {
                 <option value="High">High</option>
               </select>
             </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Assign Driver</label>
+              <select 
+                className="glass" 
+                style={{ padding: '0.85rem', borderRadius: '12px', border: '1px solid var(--surface-border)', color: 'white', background: 'var(--surface-color)' }}
+                value={formData.driver}
+                onChange={e => setFormData({...formData, driver: e.target.value})}
+              >
+                <option value="Auto Assign">Auto Assign</option>
+                {DRIVERS.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+              </select>
+            </div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-          <button 
-            className="glass" 
-            style={{ flex: 1, padding: '0.75rem', borderRadius: '12px', cursor: 'pointer', background: 'none' }}
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button 
-            style={{ flex: 1, padding: '0.75rem', borderRadius: '12px', cursor: 'pointer', background: 'var(--accent-color)', color: 'white', border: 'none' }}
-            onClick={() => { onCreate(formData); onClose(); }}
-          >
-            Initialize
-          </button>
-        </div>
+
+        <button 
+          disabled={!formData.destination}
+          style={{ 
+            padding: '1rem', 
+            borderRadius: '16px', 
+            cursor: formData.destination ? 'pointer' : 'not-allowed', 
+            background: formData.destination ? 'var(--accent-color)' : 'var(--surface-border)', 
+            color: 'white', 
+            border: 'none',
+            fontWeight: 600,
+            transition: 'all 0.3s ease'
+          }}
+          onClick={() => { onCreate(formData); onClose(); }}
+        >
+          Initialize Unit Dispatch
+        </button>
       </motion.div>
     </div>
   );
@@ -290,9 +352,16 @@ const CreateDispatchModal = ({ isOpen, onClose, onCreate }) => {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [dispatches, setDispatches] = useState(INITIAL_DISPATCHES);
+  const [dispatches, setDispatches] = useState(() => {
+    const saved = localStorage.getItem('nexus_dispatches');
+    return saved ? JSON.parse(saved) : INITIAL_DISPATCHES;
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('nexus_dispatches', JSON.stringify(dispatches));
+  }, [dispatches]);
 
   const createDispatch = (data) => {
     const newDispatch = {
@@ -300,7 +369,7 @@ export default function App() {
       destination: data.destination,
       status: 'Pending',
       priority: data.priority,
-      driver: 'Awaiting...',
+      driver: data.driver === 'Auto Assign' ? 'Awaiting...' : data.driver,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     setDispatches([newDispatch, ...dispatches]);
@@ -310,13 +379,17 @@ export default function App() {
     setDispatches(prev => prev.map(d => d.id === id ? { ...d, status: newStatus } : d));
   };
 
+  const deleteDispatch = (id) => {
+    setDispatches(prev => prev.filter(d => d.id !== id));
+  };
+
   const renderContent = () => {
     switch(activeTab) {
       case 'dashboard':
         return (
           <>
             <StatCard label="Active Dispatches" value={dispatches.filter(d => d.status !== 'Completed').length} icon={ClipboardList} trend="+2.4%" />
-            <StatCard label="Available Drivers" value="8" icon={Users} trend="-1" />
+            <StatCard label="Available Drivers" value={DRIVERS.filter(d => d.status === 'On Duty').length} icon={Users} trend="-1" />
             <StatCard label="Avg. Response Time" value="4.2m" icon={Clock} trend="-0.5m" />
             <StatCard label="Completed Today" value={dispatches.filter(d => d.status === 'Completed').length + 45} icon={CheckCircle2} trend="+12%" />
             <RealMap />
@@ -334,7 +407,7 @@ export default function App() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflowY: 'auto' }}>
                 <AnimatePresence>
                   {dispatches.map(d => (
-                    <DispatchCard key={d.id} dispatch={d} onStatusChange={handleStatusChange} />
+                    <DispatchCard key={d.id} dispatch={d} onStatusChange={handleStatusChange} onDelete={deleteDispatch} />
                   ))}
                 </AnimatePresence>
               </div>
@@ -348,7 +421,34 @@ export default function App() {
           <div className="glass" style={{ gridColumn: 'span 12', padding: '2rem', borderRadius: '24px' }}>
              <h2 style={{ marginBottom: '1.5rem', fontFamily: 'var(--font-display)' }}>All Dispatches</h2>
              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
-                {dispatches.map(d => <DispatchCard key={d.id} dispatch={d} onStatusChange={handleStatusChange} />)}
+                <AnimatePresence>
+                  {dispatches.map(d => <DispatchCard key={d.id} dispatch={d} onStatusChange={handleStatusChange} onDelete={deleteDispatch} />)}
+                </AnimatePresence>
+             </div>
+          </div>
+        );
+      case 'drivers':
+        return (
+          <div className="glass" style={{ gridColumn: 'span 12', padding: '2rem', borderRadius: '24px' }}>
+             <h2 style={{ marginBottom: '1.5rem', fontFamily: 'var(--font-display)' }}>Active Drivers</h2>
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+                {DRIVERS.map(d => (
+                  <div key={d.id} className="glass" style={{ padding: '1.5rem', borderRadius: '16px', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <div style={{ width: 48, height: 48, borderRadius: '12px', background: 'var(--surface-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Users size={24} className="text-secondary" />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700 }}>{d.name}</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Unit: {d.vehicle}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '8px', background: d.status === 'On Duty' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)', color: d.status === 'On Duty' ? 'var(--success-color)' : 'var(--warning-color)' }}>
+                        {d.status}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>⭐ {d.rating}</div>
+                    </div>
+                  </div>
+                ))}
              </div>
           </div>
         );
