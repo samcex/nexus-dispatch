@@ -174,12 +174,13 @@ L.Marker.prototype.options.icon = DefaultIcon;
 // ... (Sidebar and Header stay the same)
 
 const RealMap = () => {
-  const [positions, setPositions] = useState([
-    { id: 1, lat: 40.7128, lng: -74.0060, name: 'Unit 01' },
-    { id: 2, lat: 40.7306, lng: -73.9352, name: 'Unit 02' },
-    { id: 3, lat: 40.7580, lng: -73.9855, name: 'Unit 03' },
-    { id: 4, lat: 40.7829, lng: -73.9654, name: 'Unit 04' },
-  ]);
+  const [positions, setPositions] = useState(
+    DRIVERS.filter(d => d.status === 'On Duty').map((d, i) => ({
+      ...d,
+      lat: 40.7128 + (i * 0.02),
+      lng: -74.0060 - (i * 0.02)
+    }))
+  );
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -196,7 +197,7 @@ const RealMap = () => {
     <div className="map-widget glass" style={{ padding: 0 }}>
       <MapContainer 
         center={[40.7484, -73.9857]} 
-        zoom={13} 
+        zoom={12} 
         scrollWheelZoom={false} 
         style={{ height: '100%', width: '100%', filter: 'invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%)' }}
       >
@@ -207,9 +208,10 @@ const RealMap = () => {
         {positions.map(p => (
           <Marker key={p.id} position={[p.lat, p.lng]}>
             <Popup>
-              <div style={{ color: 'black' }}>
-                <strong>{p.name}</strong><br />
-                Status: Active
+              <div style={{ color: 'black', minWidth: '120px' }}>
+                <strong style={{ fontSize: '1rem' }}>{p.name}</strong><br />
+                <span style={{ color: 'var(--text-secondary)' }}>Unit: {p.vehicle}</span><br />
+                <span style={{ color: 'var(--success-color)', fontWeight: 600 }}>● {p.status}</span>
               </div>
             </Popup>
           </Marker>
