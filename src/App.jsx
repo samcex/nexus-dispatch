@@ -154,42 +154,73 @@ const DispatchCard = ({ dispatch, onStatusChange }) => {
   );
 };
 
-const MapSimulation = () => {
-  const [markers, setMarkers] = useState([
-    { id: 1, x: 30, y: 40 },
-    { id: 2, x: 60, y: 20 },
-    { id: 3, x: 45, y: 70 },
-    { id: 4, x: 80, y: 55 },
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix for Leaflet marker icons in React
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+let DefaultIcon = L.icon({
+    iconUrl: icon,
+    shadowUrl: iconShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41]
+});
+L.Marker.prototype.options.icon = DefaultIcon;
+
+// ... (INITIAL_DISPATCHES and VEHICLES stay the same)
+
+// ... (Sidebar and Header stay the same)
+
+const RealMap = () => {
+  const [positions, setPositions] = useState([
+    { id: 1, lat: 40.7128, lng: -74.0060, name: 'Unit 01' },
+    { id: 2, lat: 40.7306, lng: -73.9352, name: 'Unit 02' },
+    { id: 3, lat: 40.7580, lng: -73.9855, name: 'Unit 03' },
+    { id: 4, lat: 40.7829, lng: -73.9654, name: 'Unit 04' },
   ]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setMarkers(prev => prev.map(m => ({
-        ...m,
-        x: Math.max(5, Math.min(95, m.x + (Math.random() - 0.5) * 2)),
-        y: Math.max(5, Math.min(95, m.y + (Math.random() - 0.5) * 2)),
+      setPositions(prev => prev.map(p => ({
+        ...p,
+        lat: p.lat + (Math.random() - 0.5) * 0.001,
+        lng: p.lng + (Math.random() - 0.5) * 0.001,
       })));
     }, 3000);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <div className="map-widget glass">
-      <div className="sim-map">
-        {markers.map(marker => (
-          <div 
-            key={marker.id} 
-            className="map-marker"
-            style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
-          />
+    <div className="map-widget glass" style={{ padding: 0 }}>
+      <MapContainer 
+        center={[40.7484, -73.9857]} 
+        zoom={13} 
+        scrollWheelZoom={false} 
+        style={{ height: '100%', width: '100%', filter: 'invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%)' }}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        {positions.map(p => (
+          <Marker key={p.id} position={[p.lat, p.lng]}>
+            <Popup>
+              <div style={{ color: 'black' }}>
+                <strong>{p.name}</strong><br />
+                Status: Active
+              </div>
+            </Popup>
+          </Marker>
         ))}
-      </div>
-      <div style={{ position: 'absolute', bottom: '1rem', left: '1rem', display: 'flex', gap: '0.5rem' }}>
+      </MapContainer>
+      <div style={{ position: 'absolute', bottom: '1rem', left: '1rem', display: 'flex', gap: '0.5rem', zIndex: 1000 }}>
         <div className="glass" style={{ padding: '0.5rem 1rem', borderRadius: '8px', fontSize: '0.75rem' }}>
           Live Units: 4
         </div>
         <div className="glass" style={{ padding: '0.5rem 1rem', borderRadius: '8px', fontSize: '0.75rem' }}>
-          Network: Stable
+          Region: New York
         </div>
       </div>
     </div>
@@ -288,7 +319,7 @@ export default function App() {
             <StatCard label="Available Drivers" value="8" icon={Users} trend="-1" />
             <StatCard label="Avg. Response Time" value="4.2m" icon={Clock} trend="-0.5m" />
             <StatCard label="Completed Today" value={dispatches.filter(d => d.status === 'Completed').length + 45} icon={CheckCircle2} trend="+12%" />
-            <MapSimulation />
+            <RealMap />
             <div className="dispatch-list glass">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                 <h2 style={{ fontSize: '1rem', fontFamily: 'var(--font-display)' }}>Active Tasks</h2>
@@ -311,7 +342,7 @@ export default function App() {
           </>
         );
       case 'map':
-        return <div style={{ gridColumn: 'span 12', height: '80vh' }}><MapSimulation /></div>;
+        return <div style={{ gridColumn: 'span 12', height: '80vh' }}><RealMap /></div>;
       case 'dispatches':
         return (
           <div className="glass" style={{ gridColumn: 'span 12', padding: '2rem', borderRadius: '24px' }}>
